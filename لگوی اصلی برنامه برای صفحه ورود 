@@ -1,0 +1,93 @@
+<!-- در frontend/index.html جایگزین بخش لوگو شود -->
+<div class="logo">
+    <div class="main-logo">
+        <div class="logo-symbol">
+            <div class="lock-shield">
+                <div class="shield"></div>
+                <div class="lock"></div>
+            </div>
+        </div>
+        <div class="logo-typo">
+            <div class="samsung-text">SAMSUNG</div>
+            <div class="vault-text">VAULT</div>
+            <div class="tagline">Secure Digital Vault</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.main-logo {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.logo-symbol {
+    margin-bottom: 20px;
+}
+
+.lock-shield {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
+}
+
+.shield {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #1428A0, #00a3ff);
+    border-radius: 20px 20px 20px 0;
+    transform: rotate(45deg);
+    position: absolute;
+}
+
+.lock {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 40px;
+    background: white;
+    border-radius: 8px;
+    z-index: 2;
+}
+
+.lock:before {
+    content: '';
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 20px;
+    background: white;
+    border-radius: 20px 20px 0 0;
+}
+
+.logo-typo {
+    color: #333;
+}
+
+.samsung-text {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #1428A0;
+    margin-bottom: 5px;
+}
+
+.vault-text {
+    font-size: 2.5rem;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.tagline {
+    font-size: 1rem;
+    color: #666;
+    letter-spacing: 1px;
+}
+</style>
