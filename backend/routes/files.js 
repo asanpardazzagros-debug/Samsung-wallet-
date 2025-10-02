@@ -1,0 +1,111 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const { authenticateToken } = require('../middleware/auth');
+const encryptionService = require('../middleware/encryption');
+const VaultItem = require('../models/VaultItem');
+
+// تنظیم multer برای آپلود فایل
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
+    },
+    fileFilter: (req, file, cb) => {
+        // بررسی نوع فایل
+        const allowedTypes = [
+            'image/jpeg', 'image/png', 'image/gif',
+            'application/pdf',
+            'text/plain',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+        
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('نوع فایل مجاز نیست'), false);
+        }
+    }
+});
+
+// آپلود فایل
+router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'فایلی انتخاب نشده است' });
+        }
+
+        const userId = req.user.userId;
+        const { title, category } = req.body;
+        
+        const masterKey = req.headers['x-master-key'] || 'default-key';
+        
+        // رمزنگاری فایل
+        const encryptedFile = encryptionService.encryptFile(
+            req.file.buffer, 
+            Buffer.from(masterKey, 'hex')
+        );
+        
+        const newFileItem = new VaultItem({
+            userId,
+            type: 'file',
+            title: title || req.file.originalname,
+            encryptedData: encryptedFile.encryptedData.toString('base64'),
+            iv: encryptedFile.iv.toString('hex'),
+            authTag: encryptedFile.authTag.toString('hex'),
+            category: category || 'files',
+            tags: ['file', req.file.mimetype]
+        });
+        
+        await newFileItem.save();
+        
+        res.json({
+            message: 'فایل با موفقیت آپلود شد',
+            file: {
+                id: newFileItem._id,
+                title: newFileItem.title,
+                size: req.file.size,
+                mimetype: req.file.mimetype,
+                createdAt: newFileItem.createdAt
+            }
+        });
+        
+    } catch (error) {
+        console.error('File upload error:', error);
+        res.status(500).json({ error: 'خطا در آپلود فایل' });
+    }
+});
+
+// دریافت فایل
+router.get('/download/:id', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const fileId = req.params.id;
+        
+        const fileItem = await VaultItem.findOne({ _id: fileId, userId, type: 'file' });
+        
+        if (!fileItem) {
+            return res.status(404).json({ error: 'فایل یافت نشد' });
+        }
+        
+        // در اینجا باید رمزگشایی انجام شود
+        // این یک پیاده‌سازی ساده است
+        
+        res.json({
+            message: 'اطلاعات فایل',
+            file: {
+                id: fileItem._id,
+                title: fileItem.title,
+                createdAt: fileItem.createdAt
+            }
+        });
+        
+    } catch (error) {
+        console.error('File download error:', error);
+        res.status(500).json({ error: 'خطا در دریافت فایل' });
+    }
+});
+
+module.exports = router;
