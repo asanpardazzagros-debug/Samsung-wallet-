@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامسونگ ولت - Samsung Vault</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <!-- صفحه لاگین -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="logo">
+                <h1>🔒 سامسونگ ولت</h1>
+                <p>محفظه امن دیجیتال شما</p>
+            </div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">ورود</button>
+                <button class="auth-tab" data-tab="register">ثبت نام</button>
+            </div>
+            
+            <!-- فرم لاگین -->
+            <form id="loginForm" class="auth-form active">
+                <div class="form-group">
+                    <input type="text" id="loginUsername" placeholder="نام کاربری" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" placeholder="رمز عبور" required>
+                </div>
+                <button type="submit" class="btn-primary">ورود به سیستم</button>
+            </form>
+            
+            <!-- فرم ثبت نام -->
+            <form id="registerForm" class="auth-form">
+                <div class="form-group">
+                    <input type="text" id="registerUsername" placeholder="نام کاربری" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="registerEmail" placeholder="ایمیل" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="registerPassword" placeholder="رمز عبور" required>
+                    <small>رمز عبور باید حداقل ۶ کاراکتر باشد</small>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="registerConfirmPassword" placeholder="تکرار رمز عبور" required>
+                </div>
+                <button type="submit" class="btn-primary">ایجاد حساب کاربری</button>
+            </form>
+            
+            <div class="security-notice">
+                <p>🔐 اطلاعات شما با بالاترین سطح امنیتی محافظت می‌شود</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- صفحه اصلی -->
+    <div id="mainPage" class="page">
+        <header class="header">
+            <div class="header-left">
+                <h2>🔒 محفظه امن من</h2>
+            </div>
+            <div class="header-right">
+                <span id="userWelcome">خوش آمدید!</span>
+                <button id="logoutBtn" class="btn-logout">خروج</button>
+            </div>
+        </header>
+        
+        <div class="vault-container">
+            <!-- نوار کناری -->
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>دسته‌بندی‌ها</h3>
+                    <button class="tab-btn active" data-tab="passwords">
+                        <span>🔑</span>
+                        <span>رمزهای عبور</span>
+                    </button>
+                    <button class="tab-btn" data-tab="files">
+                        <span>📁</span>
+                        <span>فایل‌ها</span>
+                    </button>
+                    <button class="tab-btn" data-tab="notes">
+                        <span>📝</span>
+                        <span>یادداشت‌ها</span>
+                    </button>
+                    <button class="tab-btn" data-tab="cards">
+                        <span>💳</span>
+                        <span>کارت‌ها</span>
+                    </button>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h3>مدیریت</h3>
+                    <button class="sidebar-menu" data-action="search">
+                        <span>🔍</span>
+                        <span>جستجو</span>
+                    </button>
+                    <button class="sidebar-menu" data-action="favorites">
+                        <span>⭐</span>
+                        <span>مورد علاقه‌ها</span>
+                    </button>
+                    <button class="sidebar-menu" data-action="settings">
+                        <span>⚙️</span>
+                        <span>تنظیمات</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- محتوای اصلی -->
+            <div class="content">
+                <!-- تب رمزهای عبور -->
+                <div id="passwordsTab" class="tab-content active">
+                    <div class="content-header">
+                        <h3>رمزهای عبور</h3>
+                        <button id="addPasswordBtn" class="btn-primary">
+                            <span>+</span>
+                            افزودن رمز عبور
+                        </button>
+                    </div>
+                    <div id="passwordsList" class="items-list">
+                        <!-- لیست رمزهای عبور اینجا نمایش داده می‌شود -->
+                    </div>
+                </div>
+                
+                <!-- تب فایل‌ها -->
+                <div id="filesTab" class="tab-content">
+                    <div class="content-header">
+                        <h3>فایل‌های امن</h3>
+                        <div class="file-actions">
+                            <input type="file" id="fileUpload" multiple style="display: none;">
+                            <button id="uploadFileBtn" class="btn-primary">
+                                <span>📁</span>
+                                آپلود فایل
+                            </button>
+                        </div>
+                    </div>
+                    <div id="filesList" class="items-list">
+                        <!-- لیست فایل‌ها اینجا نمایش داده می‌شود -->
+                    </div>
+                </div>
+                
+                <!-- تب یادداشت‌ها -->
+                <div id="notesTab" class="tab-content">
+                    <div class="content-header">
+                        <h3>یادداشت‌های امن</h3>
+                        <button id="addNoteBtn" class="btn-primary">
+                            <span>+</span>
+                            یادداشت جدید
+                        </button>
+                    </div>
+                    <div id="notesList" class="items-list">
+                        <!-- لیست یادداشت‌ها اینجا نمایش داده می‌شود -->
+                    </div>
+                </div>
+                
+                <!-- تب کارت‌ها -->
+                <div id="cardsTab" class="tab-content">
+                    <div class="content-header">
+                        <h3>کارت‌های بانکی</h3>
+                        <button id="addCardBtn" class="btn-primary">
+                            <span>+</span>
+                            افزودن کارت
+                        </button>
+                    </div>
+                    <div id="cardsList" class="items-list">
+                        <!-- لیست کارت‌ها اینجا نمایش داده می‌شود -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال‌ها -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">عنوان مودال</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- محتوای مودال -->
+            </div>
+        </div>
+    </div>
+
+    <!-- اسکریپت‌ها -->
+    <script src="js/auth.js"></script>
+    <script src="js/crypto.js"></script>
+    <script src="js/vault.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
