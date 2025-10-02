@@ -1,0 +1,14 @@
+/* برای حالت تاریک */
+@media (prefers-color-scheme: dark) {
+    .main-logo .samsung-text {
+        color: #00a3ff;
+    }
+    
+    .main-logo .vault-text {
+        color: #ffffff;
+    }
+    
+    .main-logo .tagline {
+        color: #cccccc;
+    }
+}
