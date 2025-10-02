@@ -1,0 +1,63 @@
+<!-- frontend/assets/logo2.html -->
+<div class="premium-logo">
+    <div class="logo-badge">
+        <div class="badge-icon">🛡️</div>
+        <div class="badge-content">
+            <span class="company">SAMSUNG</span>
+            <span class="app-name">SECURE VAULT</span>
+        </div>
+        <div class="security-badge">AES-256</div>
+    </div>
+</div>
+
+<style>
+.premium-logo {
+    padding: 30px;
+    background: linear-gradient(45deg, #0c1b4d, #1a3b8b);
+    border-radius: 25px;
+    border: 3px solid #00a3ff;
+    box-shadow: 0 15px 40px rgba(12, 27, 77, 0.4);
+}
+
+.logo-badge {
+    text-align: center;
+    color: white;
+}
+
+.badge-icon {
+    font-size: 4rem;
+    margin-bottom: 15px;
+    text-shadow: 0 5px 15px rgba(0, 163, 255, 0.5);
+}
+
+.badge-content {
+    margin-bottom: 15px;
+}
+
+.company {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #00a3ff;
+    margin-bottom: 5px;
+}
+
+.app-name {
+    display: block;
+    font-size: 2.2rem;
+    font-weight: 300;
+    letter-spacing: 2px;
+}
+
+.security-badge {
+    display: inline-block;
+    background: #00a3ff;
+    color: white;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+</style>
