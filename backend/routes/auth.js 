@@ -1,0 +1,156 @@
+const express = require('express');
+const router = express.Router();
+const { 
+    hashPassword, 
+    verifyPassword, 
+    generateToken
+} = require('../middleware/auth');
+const encryptionService = require('../middleware/encryption');
+const User = require('../models/User');
+
+router.post('/register', async (req, res) => {
+    try {
+        const { username, password, email } = req.body;
+
+        if (!username || !password || !email) {
+            return res.status(400).json({ 
+                error: 'تمامی فیلدها الزامی هستند' 
+            });
+        }
+
+        const existingUser = await User.findOne({ 
+            $or: [{ username }, { email }] 
+        });
+        
+        if (existingUser) {
+            return res.status(400).json({ 
+                error: 'نام کاربری یا ایمیل قبلاً استفاده شده است' 
+            });
+        }
+
+        const hashedPassword = await hashPassword(password);
+        const masterKeySalt = encryptionService.generateSalt();
+
+        const newUser = new User({
+            username,
+            email,
+            password: hashedPassword,
+            masterKeySalt,
+            createdAt: new Date()
+        });
+
+        await newUser.save();
+
+        const token = generateToken(newUser._id, username);
+
+        res.status(201).json({
+            message: 'حساب کاربری با موفقیت ایجاد شد',
+            token,
+            user: {
+                id: newUser._id,
+                username: newUser.username,
+                email: newUser.email
+            },
+            masterKeySalt
+        });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ 
+            error: 'خطا در ایجاد حساب کاربری' 
+        });
+    }
+});
+
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ 
+                error: 'نام کاربری و رمز عبور الزامی هستند' 
+            });
+        }
+
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(401).json({ 
+                error: 'نام کاربری یا رمز عبور اشتباه است' 
+            });
+        }
+
+        const isValidPassword = await verifyPassword(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ 
+                error: 'نام کاربری یا رمز عبور اشتباه است' 
+            });
+        }
+
+        user.lastLogin = new Date();
+        await user.save();
+
+        const token = generateToken(user._id, username);
+
+        res.json({
+            message: 'ورود موفقیت‌آمیز',
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email
+            },
+            masterKeySalt: user.masterKeySalt
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ 
+            error: 'خطا در ورود به سیستم' 
+        });
+    }
+});
+
+router.get('/verify', require('../middleware/auth').authenticateToken, (req, res) => {
+    res.json({ 
+        valid: true, 
+        user: req.user 
+    });
+});
+
+router.post('/change-password', require('../middleware/auth').authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user.userId;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ 
+                error: 'رمز عبور فعلی و جدید الزامی هستند' 
+            });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'کاربر یافت نشد' });
+        }
+
+        const isValid = await verifyPassword(currentPassword, user.password);
+        if (!isValid) {
+            return res.status(401).json({ error: 'رمز عبور فعلی اشتباه است' });
+        }
+
+        user.password = await hashPassword(newPassword);
+        user.masterKeySalt = encryptionService.generateSalt();
+        await user.save();
+
+        res.json({ 
+            message: 'رمز عبور با موفقیت تغییر یافت',
+            newMasterKeySalt: user.masterKeySalt
+        });
+
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ error: 'خطا در تغییر رمز عبور' });
+    }
+});
+
+module.exports = router;
