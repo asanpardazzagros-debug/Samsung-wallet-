@@ -1,0 +1,255 @@
+class AuthManager {
+    constructor() {
+        this.token = localStorage.getItem('samsung_vault_token');
+        this.user = JSON.parse(localStorage.getItem('samsung_vault_user') || 'null');
+        this.masterKeySalt = localStorage.getItem('samsung_vault_salt');
+        this.baseURL = window.location.origin + '/api';
+        
+        this.initializeEventListeners();
+        this.checkAuthStatus();
+    }
+
+    initializeEventListeners() {
+        // تب‌های لاگین/ثبت نام
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.switchAuthTab(e.target.dataset.tab);
+            });
+        });
+
+        // فرم لاگین
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
+
+        // فرم ثبت نام
+        document.getElementById('registerForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleRegister();
+        });
+
+        // دکمه خروج
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.logout();
+        });
+    }
+
+    switchAuthTab(tab) {
+        // غیرفعال کردن همه تب‌ها
+        document.querySelectorAll('.auth-tab').forEach(t => {
+            t.classList.remove('active');
+        });
+        document.querySelectorAll('.auth-form').forEach(f => {
+            f.classList.remove('active');
+        });
+
+        // فعال کردن تب انتخاب شده
+        document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+        document.getElementById(`${tab}Form`).classList.add('active');
+    }
+
+    async handleLogin() {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+
+        try {
+            const result = await this.login(username, password);
+            this.showNotification('ورود موفقیت‌آمیز بود!', 'success');
+            this.showMainPage();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async handleRegister() {
+        const username = document.getElementById('registerUsername').value;
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('registerConfirmPassword').value;
+
+        if (password !== confirmPassword) {
+            this.showNotification('رمزهای عبور مطابقت ندارند', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            this.showNotification('رمز عبور باید حداقل ۶ کاراکتر باشد', 'error');
+            return;
+        }
+
+        try {
+            const result = await this.register(username, password, email);
+            this.showNotification('حساب کاربری با موفقیت ایجاد شد!', 'success');
+            this.showMainPage();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async login(username, password) {
+        try {
+            const response = await fetch(`${this.baseURL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'خطا در ورود');
+            }
+
+            this.token = data.token;
+            this.user = data.user;
+            this.masterKeySalt = data.masterKeySalt;
+
+            // ذخیره در localStorage
+            localStorage.setItem('samsung_vault_token', this.token);
+            localStorage.setItem('samsung_vault_user', JSON.stringify(this.user));
+            localStorage.setItem('samsung_vault_salt', this.masterKeySalt);
+
+            return data;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async register(username, password, email) {
+        try {
+            const response = await fetch(`${this.baseURL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password, email })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'خطا در ثبت نام');
+            }
+
+            this.token = data.token;
+            this.user = data.user;
+            this.masterKeySalt = data.masterKeySalt;
+
+            localStorage.setItem('samsung_vault_token', this.token);
+            localStorage.setItem('samsung_vault_user', JSON.stringify(this.user));
+            localStorage.setItem('samsung_vault_salt', this.masterKeySalt);
+
+            return data;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    logout() {
+        this.token = null;
+        this.user = null;
+        this.masterKeySalt = null;
+        
+        localStorage.removeItem('samsung_vault_token');
+        localStorage.removeItem('samsung_vault_user');
+        localStorage.removeItem('samsung_vault_salt');
+        
+        this.showLoginPage();
+    }
+
+    async verifyToken() {
+        if (!this.token) return false;
+
+        try {
+            const response = await fetch(`${this.baseURL}/auth/verify`, {
+                headers: this.getHeaders()
+            });
+
+            return response.ok;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    async checkAuthStatus() {
+        if (this.token && this.user) {
+            const isValid = await this.verifyToken();
+            if (isValid) {
+                this.showMainPage();
+            } else {
+                this.logout();
+            }
+        } else {
+            this.showLoginPage();
+        }
+    }
+
+    showLoginPage() {
+        document.getElementById('loginPage').classList.add('active');
+        document.getElementById('mainPage').classList.remove('active');
+        
+        // ریست فرم‌ها
+        document.getElementById('loginForm').reset();
+        document.getElementById('registerForm').reset();
+    }
+
+    showMainPage() {
+        document.getElementById('loginPage').classList.remove('active');
+        document.getElementById('mainPage').classList.add('active');
+        
+        // نمایش نام کاربری
+        document.getElementById('userWelcome').textContent = 
+            `خوش آمدید، ${this.user.username}!`;
+    }
+
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+        };
+    }
+
+    showNotification(message, type = 'info') {
+        // ایجاد نوتیفیکیشن
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        // استایل نوتیفیکیشن
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 10000;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        `;
+        
+        if (type === 'success') {
+            notification.style.background = '#27ae60';
+        } else if (type === 'error') {
+            notification.style.background = '#e74c3c';
+        } else {
+            notification.style.background = '#3498db';
+        }
+        
+        document.body.appendChild(notification);
+        
+        // حذف خودکار بعد از 3 ثانیه
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+}
+
+// ایجاد نمونه از AuthManager
+const authManager = new AuthManager();
