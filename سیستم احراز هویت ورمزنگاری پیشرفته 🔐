@@ -1,0 +1,595 @@
+🔐 سیستم احراز هویت و رمزنگاری پیشرفته
+
+🏗️ ساختار امنیتی
+
+backend/middleware/auth.js
+
+```javascript
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key';
+const SALT_ROUNDS = 12;
+
+// تولید هش رمز عبور
+const hashPassword = async (password) => {
+    return await bcrypt.hash(password, SALT_ROUNDS);
+};
+
+// بررسی رمز عبور
+const verifyPassword = async (password, hashedPassword) => {
+    return await bcrypt.compare(password, hashedPassword);
+};
+
+// تولید توکن JWT
+const generateToken = (userId, username) => {
+    return jwt.sign(
+        { 
+            userId, 
+            username,
+            iss: 'samsung-vault',
+            aud: 'samsung-vault-web'
+        },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+    );
+};
+
+// اعتبارسنجی توکن
+const verifyToken = (token) => {
+    try {
+        return jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+        throw new Error('توکن نامعتبر است');
+    }
+};
+
+// میدلور برای بررسی احراز هویت
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: 'دسترسی غیرمجاز' });
+    }
+
+    try {
+        const decoded = verifyToken(token);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(403).json({ error: 'توکن نامعتبر' });
+    }
+};
+
+module.exports = {
+    hashPassword,
+    verifyPassword,
+    generateToken,
+    verifyToken,
+    authenticateToken
+};
+```
+
+backend/middleware/encryption.js
+
+```javascript
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
+class EncryptionService {
+    constructor() {
+        this.algorithm = 'aes-256-gcm';
+        this.keyLength = 32;
+        this.ivLength = 16;
+        this.authTagLength = 16;
+    }
+
+    // تولید کلید اصلی از رمز عبور کاربر
+    async deriveMasterKey(password, salt) {
+        return new Promise((resolve, reject) => {
+            crypto.scrypt(password, salt, this.keyLength, (err, derivedKey) => {
+                if (err) reject(err);
+                resolve(derivedKey);
+            });
+        });
+    }
+
+    // تولید نمک تصادفی
+    generateSalt() {
+        return crypto.randomBytes(16);
+    }
+
+    // تولید IV تصادفی
+    generateIV() {
+        return crypto.randomBytes(this.ivLength);
+    }
+
+    // رمزنگاری داده
+    encryptData(data, masterKey) {
+        try {
+            const iv = this.generateIV();
+            const cipher = crypto.createCipher(this.algorithm, masterKey);
+            cipher.setAAD(Buffer.from('samsung-vault'));
+            
+            let encrypted = cipher.update(data, 'utf8', 'hex');
+            encrypted += cipher.final('hex');
+            
+            const authTag = cipher.getAuthTag();
+            
+            return {
+                encryptedData: encrypted,
+                iv: iv.toString('hex'),
+                authTag: authTag.toString('hex')
+            };
+        } catch (error) {
+            throw new Error('خطا در رمزنگاری داده');
+        }
+    }
+
+    // رمزگشایی داده
+    decryptData(encryptedData, iv, authTag, masterKey) {
+        try {
+            const decipher = crypto.createDecipher(this.algorithm, masterKey);
+            decipher.setAAD(Buffer.from('samsung-vault'));
+            decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+            
+            let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            
+            return decrypted;
+        } catch (error) {
+            throw new Error('خطا در رمزگشایی داده');
+        }
+    }
+
+    // رمزنگاری فایل
+    encryptFile(buffer, masterKey) {
+        const iv = this.generateIV();
+        const cipher = crypto.createCipher(this.algorithm, masterKey);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(buffer),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            encryptedData: encrypted,
+            iv: iv,
+            authTag: authTag
+        };
+    }
+
+    // تولید کلید تصادفی برای هر آیتم
+    generateItemKey() {
+        return crypto.randomBytes(32);
+    }
+}
+
+module.exports = new EncryptionService();
+```
+
+backend/routes/auth.js
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const { 
+    hashPassword, 
+    verifyPassword, 
+    generateToken,
+    authenticateToken 
+} = require('../middleware/auth');
+const User = require('../models/User');
+
+// ثبت نام کاربر
+router.post('/register', async (req, res) => {
+    try {
+        const { username, password, email } = req.body;
+
+        // بررسی وجود کاربر
+        const existingUser = await User.findOne({ 
+            $or: [{ username }, { email }] 
+        });
+        
+        if (existingUser) {
+            return res.status(400).json({ 
+                error: 'نام کاربری یا ایمیل قبلاً استفاده شده است' 
+            });
+        }
+
+        // هش کردن رمز عبور
+        const hashedPassword = await hashPassword(password);
+
+        // ایجاد کاربر جدید
+        const newUser = new User({
+            username,
+            email,
+            password: hashedPassword,
+            createdAt: new Date()
+        });
+
+        await newUser.save();
+
+        // تولید توکن
+        const token = generateToken(newUser._id, username);
+
+        res.status(201).json({
+            message: 'حساب کاربری با موفقیت ایجاد شد',
+            token,
+            user: {
+                id: newUser._id,
+                username: newUser.username,
+                email: newUser.email
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ 
+            error: 'خطا در ایجاد حساب کاربری' 
+        });
+    }
+});
+
+// ورود کاربر
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // پیدا کردن کاربر
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(401).json({ 
+                error: 'نام کاربری یا رمز عبور اشتباه است' 
+            });
+        }
+
+        // بررسی رمز عبور
+        const isValidPassword = await verifyPassword(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ 
+                error: 'نام کاربری یا رمز عبور اشتباه است' 
+            });
+        }
+
+        // آپدیت آخرین ورود
+        user.lastLogin = new Date();
+        await user.save();
+
+        // تولید توکن
+        const token = generateToken(user._id, username);
+
+        res.json({
+            message: 'ورود موفقیت‌آمیز',
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ 
+            error: 'خطا در ورود به سیستم' 
+        });
+    }
+});
+
+// بررسی وضعیت توکن
+router.get('/verify', authenticateToken, (req, res) => {
+    res.json({ 
+        valid: true, 
+        user: req.user 
+    });
+});
+
+// تغییر رمز عبور
+router.post('/change-password', authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user.userId;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'کاربر یافت نشد' });
+        }
+
+        // بررسی رمز عبور فعلی
+        const isValid = await verifyPassword(currentPassword, user.password);
+        if (!isValid) {
+            return res.status(401).json({ error: 'رمز عبور فعلی اشتباه است' });
+        }
+
+        // هش کردن رمز عبور جدید
+        user.password = await hashPassword(newPassword);
+        await user.save();
+
+        res.json({ message: 'رمز عبور با موفقیت تغییر یافت' });
+
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در تغییر رمز عبور' });
+    }
+});
+
+module.exports = router;
+```
+
+frontend/js/auth.js
+
+```javascript
+class AuthManager {
+    constructor() {
+        this.token = localStorage.getItem('samsung_vault_token');
+        this.user = JSON.parse(localStorage.getItem('samsung_vault_user') || 'null');
+        this.baseURL = 'http://localhost:3000/api';
+    }
+
+    // تنظیم هدرهای درخواست
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+        };
+    }
+
+    // بررسی وضعیت لاگین
+    isLoggedIn() {
+        return !!this.token && !!this.user;
+    }
+
+    // لاگین
+    async login(username, password) {
+        try {
+            const response = await fetch(`${this.baseURL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'خطا در ورود');
+            }
+
+            this.token = data.token;
+            this.user = data.user;
+
+            // ذخیره در localStorage
+            localStorage.setItem('samsung_vault_token', this.token);
+            localStorage.setItem('samsung_vault_user', JSON.stringify(this.user));
+
+            return data;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // ثبت نام
+    async register(username, password, email) {
+        try {
+            const response = await fetch(`${this.baseURL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password, email })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'خطا در ثبت نام');
+            }
+
+            this.token = data.token;
+            this.user = data.user;
+
+            // ذخیره در localStorage
+            localStorage.setItem('samsung_vault_token', this.token);
+            localStorage.setItem('samsung_vault_user', JSON.stringify(this.user));
+
+            return data;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // لاگ اوت
+    logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('samsung_vault_token');
+        localStorage.removeItem('samsung_vault_user');
+        window.location.href = '/';
+    }
+
+    // بررسی اعتبار توکن
+    async verifyToken() {
+        if (!this.token) return false;
+
+        try {
+            const response = await fetch(`${this.baseURL}/auth/verify`, {
+                headers: this.getHeaders()
+            });
+
+            return response.ok;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    // تغییر رمز عبور
+    async changePassword(currentPassword, newPassword) {
+        try {
+            const response = await fetch(`${this.baseURL}/auth/change-password`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'خطا در تغییر رمز عبور');
+            }
+
+            return data;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+}
+
+// ایجاد نمونه از AuthManager
+const authManager = new AuthManager();
+```
+
+frontend/js/crypto.js
+
+```javascript
+class ClientCrypto {
+    constructor() {
+        this.masterKey = null;
+    }
+
+    // تولید کلید اصلی از رمز عبور
+    async deriveMasterKey(password, salt) {
+        const encoder = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(password),
+            'PBKDF2',
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+
+        const key = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: encoder.encode(salt),
+                iterations: 100000,
+                hash: 'SHA-256'
+            },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+
+        this.masterKey = key;
+        return key;
+    }
+
+    // رمزنگاری داده در سمت کلاینت
+    async encryptData(data) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        const encoder = new TextEncoder();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        
+        const encryptedData = await crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv,
+                additionalData: encoder.encode('samsung-vault')
+            },
+            this.masterKey,
+            encoder.encode(data)
+        );
+
+        return {
+            encryptedData: Array.from(new Uint8Array(encryptedData)),
+            iv: Array.from(iv)
+        };
+    }
+
+    // رمزگشایی داده در سمت کلاینت
+    async decryptData(encryptedData, iv) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+
+        try {
+            const decryptedData = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: new Uint8Array(iv),
+                    additionalData: encoder.encode('samsung-vault')
+                },
+                this.masterKey,
+                new Uint8Array(encryptedData)
+            );
+
+            return decoder.decode(decryptedData);
+        } catch (error) {
+            throw new Error('خطا در رمزگشایی داده');
+        }
+    }
+
+    // تولید هش برای داده
+    async generateHash(data) {
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(data);
+        
+        const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // تولید کلید تصادفی
+    generateRandomKey(length = 32) {
+        return crypto.getRandomValues(new Uint8Array(length));
+    }
+}
+
+// ایجاد نمونه از ClientCrypto
+const clientCrypto = new ClientCrypto();
+```
+
+.env (فایل محیط)
+
+```env
+# تنظیمات سرور
+PORT=3000
+NODE_ENV=production
+
+# امنیت
+JWT_SECRET=your-super-secure-jwt-secret-key-here
+BCRYPT_SALT_ROUNDS=12
+
+# دیتابیس
+MONGODB_URI=mongodb://localhost:27017/samsung-vault
+
+# رمزنگاری
+ENCRYPTION_ALGORITHM=aes-256-gcm
+KEY_LENGTH=32
+IV_LENGTH=16
+
+# CORS
+ALLOWED_ORIGINS=https://yourdomain.com,http://localhost:3000
+```
+
+این سیستم امنیتی شامل:
+
+· 🔐 احراز هویت پیشرفته با JWT و bcrypt
+· 🔒 رمزنگاری end-to-end با AES-256-GCM
+· 🛡️ میدلورهای امنیتی برای محافظت از API
+· 📱 رمزنگاری سمت کلاینت برای حداکثر امنیت
+· 🔑 مدیریت کلیدهای امن برای هر کاربر
+
