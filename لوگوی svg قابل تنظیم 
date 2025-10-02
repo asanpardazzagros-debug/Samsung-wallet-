@@ -1,0 +1,22 @@
+<!-- frontend/assets/logo.svg -->
+<svg width="200" height="80" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1428A0"/>
+            <stop offset="100%" stop-color="#00a3ff"/>
+        </linearGradient>
+    </defs>
+    
+    <!-- Background Shield -->
+    <path d="M20 20 L60 20 L70 40 L60 60 L20 60 L10 40 Z" fill="url(#blueGradient)" rx="10"/>
+    
+    <!-- Lock -->
+    <rect x="30" y="30" width="20" height="25" rx="5" fill="white"/>
+    <rect x="25" y="25" width="30" height="10" rx="5" fill="white"/>
+    
+    <!-- Samsung Text -->
+    <text x="90" y="35" font-family="Arial" font-size="20" font-weight="bold" fill="#1428A0">SAMSUNG</text>
+    
+    <!-- Vault Text -->
+    <text x="90" y="60" font-family="Arial" font-size="28" font-weight="300" fill="#333">VAULT</text>
+</svg>
