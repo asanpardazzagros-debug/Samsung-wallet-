@@ -1,0 +1,63 @@
+const mongoose = require('mongoose');
+
+const vaultItemSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    type: {
+        type: String,
+        enum: ['password', 'note', 'card', 'file', 'bank'],
+        required: true
+    },
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    encryptedData: {
+        type: String,
+        required: true
+    },
+    iv: {
+        type: String,
+        required: true
+    },
+    authTag: {
+        type: String,
+        required: true
+    },
+    category: {
+        type: String,
+        default: 'general'
+    },
+    tags: [{
+        type: String,
+        trim: true
+    }],
+    favorite: {
+        type: Boolean,
+        default: false
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+// ایندکس برای جستجوی بهتر
+vaultItemSchema.index({ userId: 1, type: 1 });
+vaultItemSchema.index({ userId: 1, category: 1 });
+vaultItemSchema.index({ userId: 1, favorite: 1 });
+
+vaultItemSchema.pre('save', function(next) {
+    this.updatedAt = Date.now();
+    next();
+});
+
+module.exports = mongoose.model('VaultItem', vaultItemSchema);
