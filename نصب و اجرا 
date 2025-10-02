@@ -1,0 +1,8 @@
+# نصب dependencies
+npm install
+
+# راه‌اندازی دیتابیس MongoDB (در ترمینال جدید)
+mongod
+
+# اجرای برنامه (در ترمینال اصلی)
+npm run dev
