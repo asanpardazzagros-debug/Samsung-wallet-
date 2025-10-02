@@ -1,0 +1,22 @@
+/* اضافه کردن به frontend/css/style.css */
+.logo-animated {
+    animation: logoFloat 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+.logo-glow {
+    filter: drop-shadow(0 0 20px rgba(20, 40, 160, 0.3));
+}
+
+.logo-pulse {
+    animation: logoPulse 2s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
