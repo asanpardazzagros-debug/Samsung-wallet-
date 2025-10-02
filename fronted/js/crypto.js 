@@ -1,0 +1,170 @@
+class ClientCrypto {
+    constructor() {
+        this.masterKey = null;
+    }
+
+    async deriveMasterKey(password, salt) {
+        try {
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(password),
+                'PBKDF2',
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+
+            const key = await crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: encoder.encode(salt),
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+
+            this.masterKey = key;
+            return key;
+        } catch (error) {
+            console.error('Error deriving master key:', error);
+            throw new Error('خطا در تولید کلید اصلی');
+        }
+    }
+
+    async encryptData(data) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        try {
+            const encoder = new TextEncoder();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            
+            const encryptedData = await crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    additionalData: encoder.encode('samsung-vault')
+                },
+                this.masterKey,
+                encoder.encode(data)
+            );
+
+            return {
+                encryptedData: Array.from(new Uint8Array(encryptedData)),
+                iv: Array.from(iv)
+            };
+        } catch (error) {
+            console.error('Encryption error:', error);
+            throw new Error('خطا در رمزنگاری داده');
+        }
+    }
+
+    async decryptData(encryptedData, iv) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        try {
+            const decoder = new TextDecoder();
+            const encoder = new TextEncoder();
+
+            const decryptedData = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: new Uint8Array(iv),
+                    additionalData: encoder.encode('samsung-vault')
+                },
+                this.masterKey,
+                new Uint8Array(encryptedData)
+            );
+
+            return decoder.decode(decryptedData);
+        } catch (error) {
+            console.error('Decryption error:', error);
+            throw new Error('خطا در رمزگشایی داده');
+        }
+    }
+
+    async generateHash(data) {
+        try {
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(data);
+            
+            const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+            console.error('Hash generation error:', error);
+            throw new Error('خطا در تولید هش');
+        }
+    }
+
+    generateRandomKey(length = 32) {
+        return Array.from(crypto.getRandomValues(new Uint8Array(length)))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+
+    // رمزنگاری فایل
+    async encryptFile(file) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            
+            const encryptedData = await crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    additionalData: new TextEncoder().encode('samsung-vault-file')
+                },
+                this.masterKey,
+                arrayBuffer
+            );
+
+            return {
+                encryptedData: new Uint8Array(encryptedData),
+                iv: Array.from(iv)
+            };
+        } catch (error) {
+            console.error('File encryption error:', error);
+            throw new Error('خطا در رمزنگاری فایل');
+        }
+    }
+
+    // رمزگشایی فایل
+    async decryptFile(encryptedData, iv) {
+        if (!this.masterKey) {
+            throw new Error('کلید اصلی تنظیم نشده است');
+        }
+
+        try {
+            const decryptedData = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: new Uint8Array(iv),
+                    additionalData: new TextEncoder().encode('samsung-vault-file')
+                },
+                this.masterKey,
+                encryptedData
+            );
+
+            return new Blob([decryptedData]);
+        } catch (error) {
+            console.error('File decryption error:', error);
+            throw new Error('خطا در رمزگشایی فایل');
+        }
+    }
+}
+
+// ایجاد نمونه از ClientCrypto
+const clientCrypto = new ClientCrypto();
