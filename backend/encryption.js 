@@ -1,0 +1,95 @@
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
+class EncryptionService {
+    constructor() {
+        this.algorithm = 'aes-256-gcm';
+        this.keyLength = 32;
+        this.ivLength = 16;
+        this.authTagLength = 16;
+    }
+
+    // تولید کلید اصلی از رمز عبور کاربر
+    async deriveMasterKey(password, salt) {
+        return new Promise((resolve, reject) => {
+            crypto.scrypt(password, salt, this.keyLength, (err, derivedKey) => {
+                if (err) reject(err);
+                resolve(derivedKey);
+            });
+        });
+    }
+
+    // تولید نمک تصادفی
+    generateSalt() {
+        return crypto.randomBytes(16);
+    }
+
+    // تولید IV تصادفی
+    generateIV() {
+        return crypto.randomBytes(this.ivLength);
+    }
+
+    // رمزنگاری داده
+    encryptData(data, masterKey) {
+        try {
+            const iv = this.generateIV();
+            const cipher = crypto.createCipher(this.algorithm, masterKey);
+            cipher.setAAD(Buffer.from('samsung-vault'));
+            
+            let encrypted = cipher.update(data, 'utf8', 'hex');
+            encrypted += cipher.final('hex');
+            
+            const authTag = cipher.getAuthTag();
+            
+            return {
+                encryptedData: encrypted,
+                iv: iv.toString('hex'),
+                authTag: authTag.toString('hex')
+            };
+        } catch (error) {
+            throw new Error('خطا در رمزنگاری داده');
+        }
+    }
+
+    // رمزگشایی داده
+    decryptData(encryptedData, iv, authTag, masterKey) {
+        try {
+            const decipher = crypto.createDecipher(this.algorithm, masterKey);
+            decipher.setAAD(Buffer.from('samsung-vault'));
+            decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+            
+            let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            
+            return decrypted;
+        } catch (error) {
+            throw new Error('خطا در رمزگشایی داده');
+        }
+    }
+
+    // رمزنگاری فایل
+    encryptFile(buffer, masterKey) {
+        const iv = this.generateIV();
+        const cipher = crypto.createCipher(this.algorithm, masterKey);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(buffer),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            encryptedData: encrypted,
+            iv: iv,
+            authTag: authTag
+        };
+    }
+
+    // تولید کلید تصادفی برای هر آیتم
+    generateItemKey() {
+        return crypto.randomBytes(32);
+    }
+}
+
+module.exports = new EncryptionService();
