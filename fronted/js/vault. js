@@ -1,0 +1,719 @@
+class VaultManager {
+    constructor() {
+        this.baseURL = window.location.origin + '/api';
+        this.currentTab = 'passwords';
+        this.items = {};
+        
+        this.initializeEventListeners();
+        this.loadInitialData();
+    }
+
+    initializeEventListeners() {
+        // تب‌های اصلی
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.switchTab(e.currentTarget.dataset.tab);
+            });
+        });
+
+        // منوی کناری
+        document.querySelectorAll('.sidebar-menu').forEach(menu => {
+            menu.addEventListener('click', (e) => {
+                this.handleSidebarMenu(e.currentTarget.dataset.action);
+            });
+        });
+
+        // دکمه‌های افزودن
+        document.getElementById('addPasswordBtn').addEventListener('click', () => {
+            this.showAddPasswordModal();
+        });
+        
+        document.getElementById('addNoteBtn').addEventListener('click', () => {
+            this.showAddNoteModal();
+        });
+        
+        document.getElementById('addCardBtn').addEventListener('click', () => {
+            this.showAddCardModal();
+        });
+        
+        document.getElementById('uploadFileBtn').addEventListener('click', () => {
+            document.getElementById('fileUpload').click();
+        });
+
+        // آپلود فایل
+        document.getElementById('fileUpload').addEventListener('change', (e) => {
+            this.handleFileUpload(e.target.files);
+        });
+
+        // بستن مودال
+        document.querySelector('.modal-close').addEventListener('click', () => {
+            this.hideModal();
+        });
+
+        document.getElementById('modalOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                this.hideModal();
+            }
+        });
+    }
+
+    async loadInitialData() {
+        if (!authManager.isLoggedIn()) return;
+
+        try {
+            await this.loadItems('passwords');
+            await this.loadItems('files');
+            await this.loadItems('notes');
+            await this.loadItems('cards');
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+            authManager.showNotification('خطا در بارگذاری داده‌ها', 'error');
+        }
+    }
+
+    switchTab(tabName) {
+        // غیرفعال کردن همه تب‌ها
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        // فعال کردن تب انتخاب شده
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // بارگذاری آیتم‌های تب جاری اگر وجود ندارند
+        if (!this.items[tabName] || this.items[tabName].length === 0) {
+            this.loadItems(tabName);
+        }
+    }
+
+    async loadItems(type) {
+        try {
+            const response = await fetch(`${this.baseURL}/vault/items?type=${type}`, {
+                headers: authManager.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در دریافت داده‌ها');
+            }
+
+            const data = await response.json();
+            this.items[type] = data.items;
+            this.renderItems(type, data.items);
+            
+        } catch (error) {
+            console.error(`Error loading ${type}:`, error);
+            authManager.showNotification(`خطا در بارگذاری ${type}`, 'error');
+        }
+    }
+
+    renderItems(type, items) {
+        const container = document.getElementById(`${type}List`);
+        
+        if (!items || items.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>هیچ ${this.getTypeName(type)}ی یافت نشد</p>
+                    <button class="btn-primary" onclick="vaultManager.showAdd${this.capitalize(type)}Modal()">
+                        افزودن ${this.getTypeName(type)}
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = items.map(item => this.createItemCard(item, type)).join('');
+    }
+
+    createItemCard(item, type) {
+        return `
+            <div class="item-card" data-id="${item._id}">
+                <div class="item-header">
+                    <div class="item-title">${this.escapeHtml(item.title)}</div>
+                    <div class="item-actions">
+                        <button class="btn-icon" onclick="vaultManager.viewItem('${item._id}', '${type}')" title="مشاهده">
+                            👁️
+                        </button>
+                        <button class="btn-icon" onclick="vaultManager.editItem('${item._id}', '${type}')" title="ویرایش">
+                            ✏️
+                        </button>
+                        <button class="btn-icon" onclick="vaultManager.deleteItem('${item._id}', '${type}')" title="حذف">
+                            🗑️
+                        </button>
+                        <button class="btn-icon" onclick="vaultManager.toggleFavorite('${item._id}', '${type}')" title="${item.favorite ? 'حذف از علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها'}">
+                            ${item.favorite ? '⭐' : '☆'}
+                        </button>
+                    </div>
+                </div>
+                <div class="item-meta">
+                    <span class="item-category">${this.escapeHtml(item.category)}</span>
+                    <span class="item-date">${new Date(item.createdAt).toLocaleDateString('fa-IR')}</span>
+                </div>
+                ${item.tags && item.tags.length > 0 ? `
+                    <div class="item-tags">
+                        ${item.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getTypeName(type) {
+        const names = {
+            'passwords': 'رمز عبور',
+            'files': 'فایل',
+            'notes': 'یادداشت',
+            'cards': 'کارت'
+        };
+        return names[type] || type;
+    }
+
+    capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    showAddPasswordModal() {
+        const modalContent = `
+            <form id="addPasswordForm">
+                <div class="form-group">
+                    <label for="passwordTitle">عنوان</label>
+                    <input type="text" id="passwordTitle" placeholder="مثلاً: ایمیل جیمیل" required>
+                </div>
+                <div class="form-group">
+                    <label for="passwordUsername">نام کاربری</label>
+                    <input type="text" id="passwordUsername" placeholder="نام کاربری یا ایمیل">
+                </div>
+                <div class="form-group">
+                    <label for="passwordValue">رمز عبور</label>
+                    <input type="password" id="passwordValue" placeholder="رمز عبور" required>
+                    <button type="button" class="btn-secondary" onclick="vaultManager.generatePassword()">تولید رمز عبور</button>
+                </div>
+                <div class="form-group">
+                    <label for="passwordUrl">آدرس وب‌سایت</label>
+                    <input type="url" id="passwordUrl" placeholder="https://example.com">
+                </div>
+                <div class="form-group">
+                    <label for="passwordCategory">دسته‌بندی</label>
+                    <select id="passwordCategory">
+                        <option value="general">عمومی</option>
+                        <option value="social">شبکه‌های اجتماعی</option>
+                        <option value="email">ایمیل</option>
+                        <option value="banking">بانکی</option>
+                        <option value="work">کاری</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="vaultManager.hideModal()">لغو</button>
+                    <button type="submit" class="btn-primary">ذخیره</button>
+                </div>
+            </form>
+        `;
+
+        this.showModal('افزودن رمز عبور جدید', modalContent);
+        
+        document.getElementById('addPasswordForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveNewPassword();
+        });
+    }
+
+    generatePassword() {
+        const length = 12;
+        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+        let password = "";
+        
+        for (let i = 0; i < length; i++) {
+            password += charset.charAt(Math.floor(Math.random() * charset.length));
+        }
+        
+        document.getElementById('passwordValue').value = password;
+    }
+
+    async saveNewPassword() {
+        const title = document.getElementById('passwordTitle').value;
+        const username = document.getElementById('passwordUsername').value;
+        const password = document.getElementById('passwordValue').value;
+        const url = document.getElementById('passwordUrl').value;
+        const category = document.getElementById('passwordCategory').value;
+
+        const passwordData = {
+            username,
+            password,
+            url
+        };
+
+        try {
+            // رمزنگاری داده‌ها
+            const encryptedData = await clientCrypto.encryptData(JSON.stringify(passwordData));
+            
+            const response = await fetch(`${this.baseURL}/vault/items`, {
+                method: 'POST',
+                headers: {
+                    ...authManager.getHeaders(),
+                    'x-master-key': await this.getMasterKeyForRequest()
+                },
+                body: JSON.stringify({
+                    type: 'password',
+                    title,
+                    data: encryptedData,
+                    category
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در ذخیره رمز عبور');
+            }
+
+            authManager.showNotification('رمز عبور با موفقیت ذخیره شد', 'success');
+            this.hideModal();
+            this.loadItems('passwords');
+            
+        } catch (error) {
+            console.error('Error saving password:', error);
+            authManager.showNotification('خطا در ذخیره رمز عبور', 'error');
+        }
+    }
+
+    async getMasterKeyForRequest() {
+        // در اینجا باید کلید اصلی را از storage یا از کاربر بگیریم
+        // این یک پیاده‌سازی ساده است
+        return 'default-master-key-hex-representation';
+    }
+
+    showAddNoteModal() {
+        const modalContent = `
+            <form id="addNoteForm">
+                <div class="form-group">
+                    <label for="noteTitle">عنوان</label>
+                    <input type="text" id="noteTitle" placeholder="عنوان یادداشت" required>
+                </div>
+                <div class="form-group">
+                    <label for="noteContent">محتوا</label>
+                    <textarea id="noteContent" rows="6" placeholder="متن یادداشت شما..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="noteCategory">دسته‌بندی</label>
+                    <select id="noteCategory">
+                        <option value="general">عمومی</option>
+                        <option value="personal">شخصی</option>
+                        <option value="work">کاری</option>
+                        <option value="ideas">ایده‌ها</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="vaultManager.hideModal()">لغو</button>
+                    <button type="submit" class="btn-primary">ذخیره</button>
+                </div>
+            </form>
+        `;
+
+        this.showModal('افزودن یادداشت جدید', modalContent);
+        
+        document.getElementById('addNoteForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveNewNote();
+        });
+    }
+
+    async saveNewNote() {
+        const title = document.getElementById('noteTitle').value;
+        const content = document.getElementById('noteContent').value;
+        const category = document.getElementById('noteCategory').value;
+
+        const noteData = {
+            content
+        };
+
+        try {
+            const encryptedData = await clientCrypto.encryptData(JSON.stringify(noteData));
+            
+            const response = await fetch(`${this.baseURL}/vault/items`, {
+                method: 'POST',
+                headers: {
+                    ...authManager.getHeaders(),
+                    'x-master-key': await this.getMasterKeyForRequest()
+                },
+                body: JSON.stringify({
+                    type: 'note',
+                    title,
+                    data: encryptedData,
+                    category
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در ذخیره یادداشت');
+            }
+
+            authManager.showNotification('یادداشت با موفقیت ذخیره شد', 'success');
+            this.hideModal();
+            this.loadItems('notes');
+            
+        } catch (error) {
+            console.error('Error saving note:', error);
+            authManager.showNotification('خطا در ذخیره یادداشت', 'error');
+        }
+    }
+
+    showAddCardModal() {
+        const modalContent = `
+            <form id="addCardForm">
+                <div class="form-group">
+                    <label for="cardTitle">عنوان</label>
+                    <input type="text" id="cardTitle" placeholder="مثلاً: کارت بانک ملی" required>
+                </div>
+                <div class="form-group">
+                    <label for="cardNumber">شماره کارت</label>
+                    <input type="text" id="cardNumber" placeholder="XXXX-XXXX-XXXX-XXXX" required>
+                </div>
+                <div class="form-group">
+                    <label for="cardHolder">نام دارنده کارت</label>
+                    <input type="text" id="cardHolder" placeholder="نام کامل" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cardExpiry">تاریخ انقضا</label>
+                        <input type="text" id="cardExpiry" placeholder="MM/YY" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cardCvv">CVV2</label>
+                        <input type="text" id="cardCvv" placeholder="XXX" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="vaultManager.hideModal()">لغو</button>
+                    <button type="submit" class="btn-primary">ذخیره</button>
+                </div>
+            </form>
+        `;
+
+        this.showModal('افزودن کارت جدید', modalContent);
+        
+        document.getElementById('addCardForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveNewCard();
+        });
+    }
+
+    async saveNewCard() {
+        const title = document.getElementById('cardTitle').value;
+        const cardNumber = document.getElementById('cardNumber').value;
+        const cardHolder = document.getElementById('cardHolder').value;
+        const expiry = document.getElementById('cardExpiry').value;
+        const cvv = document.getElementById('cardCvv').value;
+
+        const cardData = {
+            cardNumber,
+            cardHolder,
+            expiry,
+            cvv
+        };
+
+        try {
+            const encryptedData = await clientCrypto.encryptData(JSON.stringify(cardData));
+            
+            const response = await fetch(`${this.baseURL}/vault/items`, {
+                method: 'POST',
+                headers: {
+                    ...authManager.getHeaders(),
+                    'x-master-key': await this.getMasterKeyForRequest()
+                },
+                body: JSON.stringify({
+                    type: 'card',
+                    title,
+                    data: encryptedData,
+                    category: 'banking'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در ذخیره کارت');
+            }
+
+            authManager.showNotification('کارت با موفقیت ذخیره شد', 'success');
+            this.hideModal();
+            this.loadItems('cards');
+            
+        } catch (error) {
+            console.error('Error saving card:', error);
+            authManager.showNotification('خطا در ذخیره کارت', 'error');
+        }
+    }
+
+    async handleFileUpload(files) {
+        if (!files || files.length === 0) return;
+
+        for (let file of files) {
+            await this.uploadFile(file);
+        }
+    }
+
+    async uploadFile(file) {
+        try {
+            // رمزنگاری فایل
+            const encryptedFile = await clientCrypto.encryptFile(file);
+            
+            const formData = new FormData();
+            formData.append('file', new Blob([encryptedFile.encryptedData]), file.name);
+            formData.append('title', file.name);
+            formData.append('category', 'files');
+
+            const response = await fetch(`${this.baseURL}/files/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authManager.token}`,
+                    'x-master-key': await this.getMasterKeyForRequest(),
+                    'x-file-iv': JSON.stringify(encryptedFile.iv)
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در آپلود فایل');
+            }
+
+            authManager.showNotification(`فایل "${file.name}" با موفقیت آپلود شد`, 'success');
+            this.loadItems('files');
+            
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            authManager.showNotification('خطا در آپلود فایل', 'error');
+        }
+    }
+
+    async viewItem(itemId, type) {
+        try {
+            const response = await fetch(`${this.baseURL}/vault/items/${itemId}`, {
+                headers: authManager.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در دریافت آیتم');
+            }
+
+            const data = await response.json();
+            this.showItemDetails(data.item, type);
+            
+        } catch (error) {
+            console.error('Error viewing item:', error);
+            authManager.showNotification('خطا در مشاهده آیتم', 'error');
+        }
+    }
+
+    showItemDetails(item, type) {
+        // این تابع باید جزئیات آیتم را در مودال نمایش دهد
+        // پیاده‌سازی کامل نیاز به رمزگشایی داده‌ها دارد
+        const modalContent = `
+            <div class="item-details">
+                <h4>${this.escapeHtml(item.title)}</h4>
+                <p><strong>نوع:</strong> ${this.getTypeName(type)}</p>
+                <p><strong>دسته‌بندی:</strong> ${this.escapeHtml(item.category)}</p>
+                <p><strong>تاریخ ایجاد:</strong> ${new Date(item.createdAt).toLocaleDateString('fa-IR')}</p>
+                ${item.tags && item.tags.length > 0 ? `
+                    <p><strong>برچسب‌ها:</strong> ${item.tags.map(tag => this.escapeHtml(tag)).join(', ')}</p>
+                ` : ''}
+                <div class="detail-actions">
+                    <button class="btn-secondary" onclick="vaultManager.hideModal()">بستن</button>
+                    <button class="btn-primary" onclick="vaultManager.editItem('${item._id}', '${type}')">ویرایش</button>
+                </div>
+            </div>
+        `;
+
+        this.showModal('جزئیات آیتم', modalContent);
+    }
+
+    async editItem(itemId, type) {
+        // پیاده‌سازی ویرایش آیتم
+        authManager.showNotification('قابلیت ویرایش به زودی اضافه خواهد شد', 'info');
+    }
+
+    async deleteItem(itemId, type) {
+        if (!confirm('آیا از حذف این آیتم اطمینان دارید؟')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.baseURL}/vault/items/${itemId}`, {
+                method: 'DELETE',
+                headers: authManager.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در حذف آیتم');
+            }
+
+            authManager.showNotification('آیتم با موفقیت حذف شد', 'success');
+            this.loadItems(type);
+            
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            authManager.showNotification('خطا در حذف آیتم', 'error');
+        }
+    }
+
+    async toggleFavorite(itemId, type) {
+        try {
+            const response = await fetch(`${this.baseURL}/vault/items/${itemId}`, {
+                method: 'PUT',
+                headers: authManager.getHeaders(),
+                body: JSON.stringify({
+                    favorite: true // این باید وضعیت فعلی را تغییر دهد
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در تغییر وضعیت علاقه‌مندی');
+            }
+
+            authManager.showNotification('وضعیت علاقه‌مندی تغییر کرد', 'success');
+            this.loadItems(type);
+            
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            authManager.showNotification('خطا در تغییر وضعیت علاقه‌مندی', 'error');
+        }
+    }
+
+    handleSidebarMenu(action) {
+        switch (action) {
+            case 'search':
+                this.showSearchModal();
+                break;
+            case 'favorites':
+                this.showFavorites();
+                break;
+            case 'settings':
+                this.showSettings();
+                break;
+        }
+    }
+
+    showSearchModal() {
+        const modalContent = `
+            <div class="search-modal">
+                <div class="form-group">
+                    <input type="text" id="searchInput" placeholder="جستجو در تمام آیتم‌ها..." autofocus>
+                </div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        `;
+
+        this.showModal('جستجو', modalContent);
+        
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            this.performSearch(e.target.value);
+        });
+    }
+
+    async performSearch(query) {
+        if (!query || query.length < 2) {
+            document.getElementById('searchResults').innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.baseURL}/vault/search?q=${encodeURIComponent(query)}`, {
+                headers: authManager.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('خطا در جستجو');
+            }
+
+            const data = await response.json();
+            this.displaySearchResults(data.items);
+            
+        } catch (error) {
+            console.error('Search error:', error);
+        }
+    }
+
+    displaySearchResults(items) {
+        const container = document.getElementById('searchResults');
+        
+        if (!items || items.length === 0) {
+            container.innerHTML = '<p class="no-results">نتیجه‌ای یافت نشد</p>';
+            return;
+        }
+
+        container.innerHTML = items.map(item => `
+            <div class="search-result-item" onclick="vaultManager.viewItem('${item._id}', '${item.type}')">
+                <div class="result-title">${this.escapeHtml(item.title)}</div>
+                <div class="result-type">${this.getTypeName(item.type)}</div>
+            </div>
+        `).join('');
+    }
+
+    showFavorites() {
+        // نمایش آیتم‌های مورد علاقه
+        this.switchTab('passwords'); // موقت
+        authManager.showNotification('نمایش مورد علاقه‌ها به زودی اضافه خواهد شد', 'info');
+    }
+
+    showSettings() {
+        const modalContent = `
+            <div class="settings-modal">
+                <h4>تنظیمات امنیتی</h4>
+                <div class="setting-item">
+                    <label>تغییر رمز عبور</label>
+                    <button class="btn-secondary" onclick="vaultManager.showChangePasswordModal()">تغییر رمز عبور</button>
+                </div>
+                <div class="setting-item">
+                    <label>خروج از تمام دستگاه‌ها</label>
+                    <button class="btn-secondary" onclick="vaultManager.logoutAllDevices()">خروج از همه جا</button>
+                </div>
+                <div class="setting-item">
+                    <label>پشتیبان‌گیری</label>
+                    <button class="btn-secondary" onclick="vaultManager.backupData()">دریافت پشتیبان</button>
+                </div>
+            </div>
+        `;
+
+        this.showModal('تنظیمات', modalContent);
+    }
+
+    showChangePasswordModal() {
+        // پیاده‌سازی تغییر رمز عبور
+        authManager.showNotification('قابلیت تغییر رمز عبور به زودی اضافه خواهد شد', 'info');
+    }
+
+    logoutAllDevices() {
+        // پیاده‌سازی خروج از تمام دستگاه‌ها
+        authManager.showNotification('قابلیت خروج از تمام دستگاه‌ها به زودی اضافه خواهد شد', 'info');
+    }
+
+    backupData() {
+        // پیاده‌سازی پشتیبان‌گیری
+        authManager.showNotification('قابلیت پشتیبان‌گیری به زودی اضافه خواهد شد', 'info');
+    }
+
+    showModal(title, content) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalBody').innerHTML = content;
+        document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    hideModal() {
+        document.getElementById('modalOverlay').classList.remove('active');
+    }
+}
+
+// ایجاد نمونه از VaultManager بعد از لاود صفحه
+let vaultManager;
+document.addEventListener('DOMContentLoaded', () => {
+    vaultManager = new VaultManager();
+});
