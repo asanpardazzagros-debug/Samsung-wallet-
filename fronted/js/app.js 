@@ -1,0 +1,115 @@
+// فایل اصلی برنامه - مدیریت کلی برنامه
+
+class App {
+    constructor() {
+        this.authManager = authManager;
+        this.vaultManager = vaultManager;
+        this.crypto = clientCrypto;
+        
+        this.initializeApp();
+    }
+
+    initializeApp() {
+        console.log('🚀 Samsung Vault Web Application Initialized');
+        
+        // بررسی وضعیت آنلاین/آفلاین
+        window.addEventListener('online', this.handleOnlineStatus.bind(this));
+        window.addEventListener('offline', this.handleOfflineStatus.bind(this));
+        
+        // مدیریت خطاهای全局
+        window.addEventListener('error', this.handleGlobalError.bind(this));
+        
+        // نمایش نسخه برنامه
+        this.showAppVersion();
+    }
+
+    handleOnlineStatus() {
+        this.authManager.showNotification('اتصال اینترنت برقرار شد', 'success');
+        // همگام‌سازی داده‌ها در صورت نیاز
+    }
+
+    handleOfflineStatus() {
+        this.authManager.showNotification('اتصال اینترنت قطع شد', 'error');
+    }
+
+    handleGlobalError(event) {
+        console.error('Global error:', event.error);
+        // می‌توانید خطاها را به سرویس مانیتورینگ گزارش دهید
+    }
+
+    showAppVersion() {
+        const version = '1.0.0';
+        console.log(`🔒 Samsung Vault v${version}`);
+        
+        // می‌توانید نسخه را در رابط کاربری نمایش دهید
+        // document.getElementById('appVersion').textContent = `v${version}`;
+    }
+
+    // متدهای کمکی全局
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    formatDate(date) {
+        return new Date(date).toLocaleDateString('fa-IR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+
+    // مدیریت session
+    setupSessionManagement() {
+        // بررسی اتوماتیک وضعیت session
+        setInterval(() => {
+            this.authManager.verifyToken().then(valid => {
+                if (!valid) {
+                    this.authManager.showNotification('Session expired. Please login again.', 'error');
+                    this.authManager.logout();
+                }
+            });
+        }, 5 * 60 * 1000); // هر 5 دقیقه
+    }
+}
+
+// راه‌اندازی برنامه وقتی DOM آماده شد
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new App();
+});
+
+// متدهای全局 برای دسترسی از HTML
+window.copyToClipboard = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        authManager.showNotification('متن کپی شد', 'success');
+    } catch (err) {
+        console.error('Failed to copy text: ', err);
+        authManager.showNotification('خطا در کپی کردن متن', 'error');
+    }
+};
+
+window.generateStrongPassword = () => {
+    const length = 16;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+    let password = "";
+    
+    // اطمینان از وجود حداقل یک کاراکتر از هر دسته
+    password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(Math.floor(Math.random() * 26));
+    password += "abcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 26));
+    password += "0123456789".charAt(Math.floor(Math.random() * 10));
+    password += "!@#$%^&*()_+-=[]{}|;:,.<>?".charAt(Math.floor(Math.random() * 24));
+    
+    // تکمیل بقیه کاراکترها
+    for (let i = password.length; i < length; i++) {
+        password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    
+    // به هم زدن ترتیب کاراکترها
+    password = password.split('').sort(() => 0.5 - Math.random()).join('');
+    
+    return password;
+};
