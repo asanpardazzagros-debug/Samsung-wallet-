@@ -1,0 +1,30 @@
+samsung-vault-web/
+│
+├── frontend/
+│   ├── index.html
+│   ├── css/
+│   │   ├── style.css
+│   │   └── responsive.css
+│   ├── js/
+│   │   ├── auth.js
+│   │   ├── vault.js
+│   │   └── crypto.js
+│   └── assets/
+│       ├── images/
+│       └── icons/
+│
+├── backend/
+│   ├── server.js
+│   ├── routes/
+│   │   ├── auth.js
+│   │   ├── vault.js
+│   │   └── files.js
+│   ├── models/
+│   │   ├── User.js
+│   │   └── VaultItem.js
+│   └── middleware/
+│       ├── auth.js
+│       └── encryption.js
+│
+└── database/
+    └── schema.sql
