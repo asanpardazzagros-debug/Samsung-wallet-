@@ -1,0 +1,56 @@
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        minlength: 3,
+        maxlength: 30
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true
+    },
+    password: {
+        type: String,
+        required: true,
+        minlength: 6
+    },
+    masterKeySalt: {
+        type: String,
+        required: true
+    },
+    securityLevel: {
+        type: String,
+        enum: ['low', 'medium', 'high'],
+        default: 'medium'
+    },
+    twoFactorEnabled: {
+        type: Boolean,
+        default: false
+    },
+    lastLogin: {
+        type: Date
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+// آپدیت updatedAt قبل از ذخیره
+userSchema.pre('save', function(next) {
+    this.updatedAt = Date.now();
+    next();
+});
+
+module.exports = mongoose.model('User', userSchema);
